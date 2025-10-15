@@ -199,6 +199,17 @@ make
 
 The program currently simulates the startup flow, loads configuration defaults from `maum.conf`, and renders the textual main menu described above. This layout mirrors the structure of [ssh-chatter](https://github.com/gg582/ssh-chatter) by separating concerns into modules for configuration, logging, session handling, and menu rendering. Future work will evolve these scaffolds into full TELNET/SSH back-ends.
 
+### Sample TELNET/SSH Sessions
+
+Running `./maum` now prints a series of realistic session transcripts demonstrating how classic terminals interact with the prototype:
+
+- **TELNET Session 1** – brand new user registering and browsing technology boards.
+- **TELNET Session 2** – returning member reading private messages and help tips.
+- **SSH Session 3** – public-key login receiving the daily bulletin before entering the menu.
+- **SSH Session 4** – mobile guest joining the live chat lounge.
+
+These transcripts show the intended flow for both protocols while the networking stack is still under construction.
+
 ## 🎯 Project Goals
 
 1. **Preserve History**: Keep the spirit of classic Korean BBS alive
