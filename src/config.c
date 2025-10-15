@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <strings.h>
 
 #define COMPONENT "config"
 
@@ -32,12 +33,29 @@ void config_init(maum_config_t *config)
     }
     memset(config->ssh_host, 0, sizeof(config->ssh_host));
     memset(config->telnet_host, 0, sizeof(config->telnet_host));
+    memset(config->motd_path, 0, sizeof(config->motd_path));
+    memset(config->board_path, 0, sizeof(config->board_path));
+    memset(config->host_key_path, 0, sizeof(config->host_key_path));
 
     strncpy(config->ssh_host, "0.0.0.0", sizeof(config->ssh_host) - 1);
     config->ssh_port = 2222;
     strncpy(config->telnet_host, "0.0.0.0", sizeof(config->telnet_host) - 1);
     config->telnet_port = 2323;
     strncpy(config->motd_path, "motd.txt", sizeof(config->motd_path) - 1);
+    strncpy(config->board_path, "data/posts.db", sizeof(config->board_path) - 1);
+    strncpy(config->host_key_path, "data/maum_host_ed25519", sizeof(config->host_key_path) - 1);
+    config->enable_builtin_ssh = false;
+}
+
+static bool parse_bool(const char *value)
+{
+    if (value == NULL) {
+        return false;
+    }
+    if (strcasecmp(value, "true") == 0 || strcasecmp(value, "yes") == 0 || strcmp(value, "1") == 0) {
+        return true;
+    }
+    return false;
 }
 
 static int parse_line(maum_config_t *config, const char *key, const char *value)
@@ -60,6 +78,18 @@ static int parse_line(maum_config_t *config, const char *key, const char *value)
     }
     if (strcmp(key, "motd_path") == 0) {
         strncpy(config->motd_path, value, sizeof(config->motd_path) - 1);
+        return 0;
+    }
+    if (strcmp(key, "board_path") == 0) {
+        strncpy(config->board_path, value, sizeof(config->board_path) - 1);
+        return 0;
+    }
+    if (strcmp(key, "host_key_path") == 0) {
+        strncpy(config->host_key_path, value, sizeof(config->host_key_path) - 1);
+        return 0;
+    }
+    if (strcmp(key, "enable_builtin_ssh") == 0) {
+        config->enable_builtin_ssh = parse_bool(value);
         return 0;
     }
     LOG_WARN(COMPONENT, "Unknown configuration key '%s'", key);
