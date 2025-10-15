@@ -1,261 +1,87 @@
-# Maum (마음) - Classic BBS Revival
+# Maum (마음) BBS
 
-> **마음** (maum) means "heart" or "mind" in Korean - the heart of community communication
+마음 BBS는 순수 C로 작성된 가벼운 텍스트 기반 커뮤니티 서버입니다. 텔넷(TELNET) 접속을 기본으로 제공하며, 표준 입력/출력 모드를 통해 기존 SSH 데몬과도 쉽게 연동할 수 있습니다. 실시간 채팅과 단일 게시판(조회/등록/삭제)을 모두 실제로 동작하도록 구현했습니다.
 
-Maum is a modern implementation of classic-style Bulletin Board System (BBS) accessible through TELNET and SSH in C2x. It revives the golden age of Korean PC communication services while embracing contemporary security and accessibility standards.
+## 주요 기능
 
-## 🎯 Concept
+- ✅ **실제 텔넷 서버** – 다중 접속을 지원하며 각 사용자는 고유한 스레드에서 세션을 진행합니다.
+- ✅ **실시간 채팅방** – 입장/퇴장 알림과 브로드캐스트 메시지를 제공하며 `/exit` 명령으로 빠져나올 수 있습니다.
+- ✅ **간단한 게시판** – 게시글 목록 조회, 단일 행 글쓰기, 작성자 본인 확인 후 삭제까지 지원합니다.
+- ✅ **MOTD 지원** – 접속 시 `motd.txt` 파일 내용을 출력합니다.
+- ✅ **표준입력(STDIN) 모드** – `./maum --stdio` 로 실행하면 한 명의 사용자를 처리하는 인터랙티브 세션이 되어, OpenSSH `ForceCommand` 등과 바로 연결할 수 있습니다.
 
-### What is a BBS?
+## 빌드
 
-A Bulletin Board System (BBS) is a computer server running software that allows users to connect via terminal to:
-- Read and post messages on topic-based bulletin boards
-- Participate in discussion forums organized by subject
-- Download and upload files
-- Send private messages to other users
-- Navigate through hierarchical menu systems
-- Engage in real-time chat rooms
+필수 도구는 POSIX 호환 C 컴파일러와 `make` 입니다.
 
-Unlike modern web forums or simple chat applications, classic BBS systems offered a complete community experience through a text-based interface.
-
-### Inspiration: Classic Korean PC Communication
-
-Maum draws inspiration from legendary Korean PC communication services that defined online culture in Korea during the 1990s:
-
-#### 🌐 Nownuri (나우누리, 1994-2022)
-- One of Korea's first commercial online services
-- Featured organized bulletin boards (게시판) by topic
-- Community forums for hobbies, technology, and social discussions
-- File exchange libraries
-- Real-time chat rooms (대화방)
-- Hierarchical navigation with numbered menu selections
-
-#### 📡 Hitel (하이텔, 1991-2007)
-- Pioneer of Korean online communication
-- Text-based interface accessed via modem
-- Rich community structure with special interest groups (SIG)
-- Message boards organized by category
-- File libraries and shareware distribution
-- Chat and messaging systems
-
-These services were more than just communication tools - they were **digital communities** where people formed lasting relationships, shared knowledge, and created culture.
-
-### Global BBS Heritage
-
-Maum also acknowledges the broader BBS tradition:
-
-#### Classic BBS (1978-1990s)
-- Door games and text adventures
-- ANSI art and creative text formatting
-- FidoNet message networks
-- File sharing and software distribution
-- SysOp (System Operator) managed communities
-
-#### Modern Variations
-- **4chan/Textboards**: Board-based structure with anonymous posting
-- **SSH Chat**: Real-time terminal chat (like ssh-chatter)
-- **Gopher**: Hierarchical document system
-
-**Important**: Maum is a **full BBS**, not just a chat system. While projects like [ssh-chatter](https://github.com/gg582/ssh-chatter) provide real-time chat, Maum offers the complete BBS experience: boards, messages, files, menus, and chat combined.
-
-## 🌟 Core Features (Planned)
-
-### 1. Traditional BBS Interface
-- **Menu-driven navigation**: Hierarchical text menus (Main → Boards → Forums → Topics)
-- **ANSI/UTF-8 support**: Colorful text art and Korean character support
-- **Command-line interface**: Keyboard shortcuts and commands
-- **Session management**: User login, profiles, and preferences
-
-### 2. Bulletin Boards (게시판)
-- **Topic-based boards**: Technology, hobbies, announcements, general discussion
-- **Threaded conversations**: Reply chains and discussion threads
-- **Message persistence**: Posts saved and browsable
-- **Search functionality**: Find posts and topics
-
-### 3. File Areas
-- **Upload/Download**: Share files within the community
-- **File descriptions**: Browse and search file libraries
-- **Categorization**: Organized file sections
-
-### 4. Communication
-- **Public boards**: Community discussions
-- **Private messages**: Direct user-to-user communication
-- **Real-time chat**: Live chat rooms for instant conversation
-- **Announcements**: System-wide bulletins
-
-### 5. User System
-- **Authentication**: Secure login with SSH keys or passwords
-- **User profiles**: Customizable profiles and signatures
-- **Access levels**: User, moderator, SysOp roles
-- **Activity tracking**: Post counts, last login, etc.
-
-### 6. Modern Security
-- **SSH protocol**: Encrypted connections (preferred)
-- **TELNET support**: Legacy access option
-- **Authentication**: Secure credential management
-- **SSL/TLS**: Optional encrypted TELNET
-
-## 🏗️ Technical Architecture
-
-### Access Methods
-
-```
-┌─────────────────────────────────────────┐
-│         Maum BBS Server                 │
-├─────────────────────────────────────────┤
-│  SSH (Port 2222) ←  Preferred/Secure    │
-│  TELNET (Port 23) ← Legacy/Optional     │
-└─────────────────────────────────────────┘
-           ↓           ↓
-    [Terminal]    [Terminal]
-     Client        Client
-```
-
-### User Experience Flow
-
-```
-Connection → Login/Register → Main Menu
-                                  ↓
-    ┌─────────────────────────────┼─────────────────────────────┐
-    ↓                             ↓                             ↓
-Bulletin Boards              File Areas                   Chat Rooms
-    ↓                             ↓                             ↓
-Browse/Post                  Upload/Download               Real-time Chat
-    ↓                             ↓                             ↓
-Read Messages                View Files                    Send Messages
-    ↓
-Reply/Comment
-```
-
-### Design Principles
-
-1. **Nostalgic UX**: Recreate the feel of 1990s Korean PC communication
-2. **Modern Backend**: Use contemporary protocols and security
-3. **Terminal-First**: Optimized for terminal/console access
-4. **Korean Support**: Full UTF-8 Korean language support
-5. **Community-Centric**: Tools for building and managing communities
-6. **Extensible**: Plugin/module system for features
-
-## 🎨 Interface Concept
-
-### Main Menu Example
-```
-╔════════════════════════════════════════════════════════════╗
-║                   마음 (Maum) BBS                          ║
-║              Classic Korean BBS Revival                     ║
-╠════════════════════════════════════════════════════════════╣
-║  Welcome, User123!                    Last login: 2025-01-15║
-╠════════════════════════════════════════════════════════════╣
-║                                                              ║
-║  [1] Bulletin Boards (게시판)                               ║
-║  [2] File Libraries (자료실)                                ║
-║  [3] Chat Rooms (대화방)                                    ║
-║  [4] Private Messages (쪽지함) [3 new]                      ║
-║  [5] User Profile (내 정보)                                 ║
-║  [6] System Info (시스템 정보)                              ║
-║  [7] Help (도움말)                                          ║
-║  [Q] Quit (종료)                                            ║
-║                                                              ║
-╚════════════════════════════════════════════════════════════╝
-
-Select [1-7, Q]: _
-```
-
-### Board View Example
-```
-╔════════════════════════════════════════════════════════════╗
-║  Technology Board (기술 게시판)                             ║
-╠════════════════════════════════════════════════════════════╣
-║  No  │ Title              │ Author   │ Date     │ Replies  ║
-╠═════════════════════════════════════════════════════════════╣
-║  125 │ New SSH tips       │ alice    │ 01/15    │ 3        ║
-║  124 │ Terminal setup     │ bob      │ 01/14    │ 7        ║
-║  123 │ BBS nostalgia      │ charlie  │ 01/13    │ 12       ║
-║  122 │ Korean fonts       │ david    │ 01/12    │ 5        ║
-╚════════════════════════════════════════════════════════════╝
-
-[N]ew Post  [R]ead  [S]earch  [B]ack: _
-```
-
-## 🚀 Getting Started (Future)
-
-### As a User
 ```bash
-# Connect via SSH (secure, recommended)
-ssh user@maum-bbs.example.com -p 2222
-
-# Or via TELNET (legacy)
-telnet maum-bbs.example.com
+make
 ```
 
-## 🎯 Project Goals
+추가로 `libssh`가 설치되어 있다면(선택사항) 향후 내장 SSH 서버 기능을 활성화할 수 있도록 빌드시 자동으로 감지합니다. 현재 저장소에는 내장 SSH 서버 코드가 포함되어 있지 않으므로, SSH 접속은 아래의 `--stdio` 연동 방식을 이용하십시오.
 
-1. **Preserve History**: Keep the spirit of classic Korean BBS alive
-2. **Modern Implementation**: Use current best practices and security
-3. **Community Building**: Provide tools for creating digital communities
-4. **Education**: Teach younger generations about BBS culture
-5. **Open Source**: Share knowledge and enable others to run BBS systems
+## 실행 방법
 
-## 🛣️ Roadmap
+### 1. 텔넷 서버 모드
 
-### Phase 1: Foundation
-- [ ] Core server architecture
-- [ ] SSH/TELNET connection handling
-- [ ] User authentication system
-- [ ] Basic menu navigation
-- [ ] Terminal rendering engine
+```bash
+./maum
+```
 
-### Phase 2: BBS Features
-- [ ] Bulletin board system
-- [ ] Message posting and threading
-- [ ] File upload/download
-- [ ] Private messaging
-- [ ] User profiles
+서버는 설정 파일(`maum.conf`)에 지정된 호스트/포트에서 텔넷을 대기합니다. 기본값은 `0.0.0.0:2323` 입니다. 접속 예시는 다음과 같습니다.
 
-### Phase 3: Community
-- [ ] Real-time chat integration
-- [ ] Moderator tools
-- [ ] Search functionality
-- [ ] ANSI/UTF-8 art support
-- [ ] Notification system
+```bash
+# 로컬 테스트
+telnet 127.0.0.1 2323
+```
 
-### Phase 4: Advanced
-- [ ] Plugin system
-- [ ] Inter-BBS networking (like FidoNet)
-- [ ] Mobile terminal clients
-- [ ] Web gateway (view-only)
-- [ ] Activity analytics
+서버를 종료하려면 `Ctrl+C` 를 누르십시오.
 
-## 🤝 Contributing
+### 2. 표준 입력/출력(STDIN) 모드 – SSH 연동용
 
-Maum is an open-source project welcoming contributions. Whether you remember the classic BBS era or are curious about digital history, your input is valued!
+```bash
+./maum --stdio
+```
 
-Areas for contribution:
-- **Development**: Core features, protocols, UI/UX
-- **Documentation**: Guides, tutorials, translations
-- **Testing**: Security audits, usability testing
-- **History**: Research on classic BBS systems
-- **Community**: Moderation, content creation
+이 모드는 한 명의 사용자를 처리하고 종료됩니다. 다음과 같은 방식으로 OpenSSH와 연동할 수 있습니다.
 
-## 📚 References & Inspiration
+1. OpenSSH 서버 설정(`/etc/ssh/sshd_config`)에 전용 계정을 추가하고 `ForceCommand` 로 `maum --stdio` 를 지정합니다.
+2. 또는 `~/.ssh/authorized_keys` 의 공개키 옵션에 `command="/path/to/maum --stdio"` 를 부여합니다.
+3. 사용자는 평소처럼 `ssh` 로 접속하면 마음 BBS 인터페이스가 나타납니다.
 
-- **Nownuri (나우누리)**: Korea's classic PC communication service
-- **Hitel (하이텔)**: Pioneer Korean online service
-- **Chollian (천리안)**: Another major Korean PC communication platform
-- **Classic BBS Systems**: The WELL, FidoNet, Citadel
-- **Modern Projects**: ssh-chatter, Mystic BBS, Synchronet
-- **Textboards**: 4chan, 2channel, textboard culture
+## 설정 파일 (`maum.conf`)
 
-## 📜 License
+| 키 | 설명 | 기본값 |
+| --- | --- | --- |
+| `telnet_host` | 텔넷 리스닝 호스트 | `0.0.0.0` |
+| `telnet_port` | 텔넷 포트 | `2323` |
+| `motd_path` | MOTD 파일 경로 | `motd.txt` |
+| `board_path` | 게시판 데이터 파일 경로 | `data/posts.db` |
+| `ssh_host` | (미래용) 내장 SSH 서버 호스트 | `0.0.0.0` |
+| `ssh_port` | (미래용) 내장 SSH 서버 포트 | `2222` |
+| `host_key_path` | (미래용) 내장 SSH 서버 호스트키 | `data/maum_host_ed25519` |
+| `enable_builtin_ssh` | true일 경우 내장 SSH 서버 사용 시도 (libssh 필요) | `false` |
 
-[To be determined]
+> 📌 현재 빌드는 내장 SSH 서버를 포함하지 않으므로 `enable_builtin_ssh` 는 기본값 `false` 로 유지하세요.
 
-## 💬 Contact
+## 데이터 파일
 
-[To be determined]
+- `motd.txt` – 접속 시 출력되는 환영 메시지
+- `data/posts.db` – `id|timestamp|author|content` 형식의 단일 게시판 데이터
+- `data/maum_host_ed25519` – SSH 연동 시 사용할 호스트키를 저장할 위치 (기본은 빈 파일)
 
----
+## 개발 가이드
 
-**Note**: This project is currently in the concept/planning phase. The features and architecture described above represent the vision for Maum BBS. Implementation is ongoing.
+- 모든 네트워크 세션은 `session_manager` 를 통해 처리됩니다.
+- 게시판 저장소는 간단한 텍스트 파일이며, 다중 쓰레드 환경을 고려해 뮤텍스를 사용합니다.
+- 채팅방은 연결된 세션들의 출력 스트림을 공유 리스트에 보관하고 브로드캐스트합니다.
+- `./maum --stdio` 실행은 테스트 자동화나 SSH 강제 명령과의 연동에 유용합니다.
 
-*마음으로 연결되는 공간* - A space connected by heart
+## 향후 계획
+
+- libssh 기반 내장 SSH 서버 구현
+- 여러 게시판/카테고리 지원
+- 사용자 인증 및 계정 시스템
+- ANSI 컬러 및 한글 단축키 개선
+
+즐거운 BBS 해킹 되세요! 💬
