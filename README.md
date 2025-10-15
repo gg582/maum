@@ -188,6 +188,17 @@ ssh user@maum-bbs.example.com -p 2222
 telnet maum-bbs.example.com
 ```
 
+### As a Developer
+
+An initial prototype written in ISO C is available in the `src/` directory. To build the standalone demonstration binary:
+
+```bash
+make
+./maum
+```
+
+The program currently simulates the startup flow, loads configuration defaults from `maum.conf`, and renders the textual main menu described above. This layout mirrors the structure of [ssh-chatter](https://github.com/gg582/ssh-chatter) by separating concerns into modules for configuration, logging, session handling, and menu rendering. Future work will evolve these scaffolds into full TELNET/SSH back-ends.
+
 ## 🎯 Project Goals
 
 1. **Preserve History**: Keep the spirit of classic Korean BBS alive
