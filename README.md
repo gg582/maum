@@ -2,7 +2,7 @@
 
 > **마음** (maum) means "heart" or "mind" in Korean - the heart of community communication
 
-Maum is a modern implementation of classic-style Bulletin Board System (BBS) accessible through TELNET and SSH. It revives the golden age of Korean PC communication services while embracing contemporary security and accessibility standards.
+Maum is a modern implementation of classic-style Bulletin Board System (BBS) accessible through TELNET and SSH in C2x. It revives the golden age of Korean PC communication services while embracing contemporary security and accessibility standards.
 
 ## 🎯 Concept
 
@@ -186,21 +186,6 @@ ssh user@maum-bbs.example.com -p 2222
 
 # Or via TELNET (legacy)
 telnet maum-bbs.example.com
-```
-
-### Running Your Own Server
-```bash
-# Install dependencies
-npm install -g maum-bbs
-
-# Initialize server
-maum-bbs init
-
-# Start server
-maum-bbs start --ssh-port 2222 --telnet-port 23
-
-# Configure boards and settings
-maum-bbs config
 ```
 
 ## 🎯 Project Goals
