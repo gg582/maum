@@ -1,6 +1,7 @@
 #include "session.h"
 
 #include "log.h"
+#include "telnet.h"
 
 #include <ctype.h>
 #include <pthread.h>
@@ -69,11 +70,21 @@ static void send_line(FILE *out, const char *fmt, ...)
     fflush(out);
 }
 
-static int read_line(FILE *in, char *buffer, size_t size)
+static int read_line(session_transport_t transport, FILE *in, FILE *out, char *buffer, size_t size)
 {
-    if (fgets(buffer, (int)size, in) == NULL) {
+    int result = 0;
+    if (transport == SESSION_TRANSPORT_TELNET) {
+        result = telnet_read_line(in, out, buffer, size);
+    } else {
+        if (fgets(buffer, (int)size, in) == NULL) {
+            return -1;
+        }
+    }
+
+    if (result != 0) {
         return -1;
     }
+
     trim_line(buffer);
     return 0;
 }
@@ -268,7 +279,7 @@ static void handle_chat(session_manager_t *manager,
     char buffer[BOARD_CONTENT_MAX];
     while (1) {
         send_text(out, "> ");
-        if (read_line(in, buffer, sizeof(buffer)) != 0) {
+        if (read_line(transport, in, out, buffer, sizeof(buffer)) != 0) {
             break;
         }
         if (strcmp(buffer, "/exit") == 0) {
@@ -325,11 +336,15 @@ static void sanitize_content(char *content)
     }
 }
 
-static void handle_board_add(session_manager_t *manager, FILE *in, FILE *out, const char *username)
+static void handle_board_add(session_manager_t *manager,
+                             session_transport_t transport,
+                             FILE *in,
+                             FILE *out,
+                             const char *username)
 {
     send_text(out, "게시물 내용을 입력하세요 (한 줄): ");
     char buffer[BOARD_CONTENT_MAX];
-    if (read_line(in, buffer, sizeof(buffer)) != 0) {
+    if (read_line(transport, in, out, buffer, sizeof(buffer)) != 0) {
         send_line(out, "입력을 받지 못했습니다.");
         return;
     }
@@ -348,11 +363,15 @@ static void handle_board_add(session_manager_t *manager, FILE *in, FILE *out, co
     send_line(out, "[#%u] 등록 완료 (%s)", post.id, post.timestamp);
 }
 
-static void handle_board_delete(session_manager_t *manager, FILE *in, FILE *out, const char *username)
+static void handle_board_delete(session_manager_t *manager,
+                                session_transport_t transport,
+                                FILE *in,
+                                FILE *out,
+                                const char *username)
 {
     send_text(out, "삭제할 게시물 번호: ");
     char buffer[32];
-    if (read_line(in, buffer, sizeof(buffer)) != 0) {
+    if (read_line(transport, in, out, buffer, sizeof(buffer)) != 0) {
         send_line(out, "입력을 받지 못했습니다.");
         return;
     }
@@ -375,11 +394,15 @@ static void handle_board_delete(session_manager_t *manager, FILE *in, FILE *out,
     }
 }
 
-static int prompt_username(FILE *in, FILE *out, char *username, size_t size)
+static int prompt_username(session_transport_t transport,
+                           FILE *in,
+                           FILE *out,
+                           char *username,
+                           size_t size)
 {
     for (int attempts = 0; attempts < 3; ++attempts) {
         send_text(out, "사용할 닉네임을 입력하세요: ");
-        if (read_line(in, username, size) != 0) {
+        if (read_line(transport, in, out, username, size) != 0) {
             return -1;
         }
         sanitize_content(username);
@@ -418,7 +441,7 @@ void session_manager_run(session_manager_t *manager,
     send_line(output, "────────────────────────────────────");
 
     char username[USERNAME_MAX];
-    if (prompt_username(input, output, username, sizeof(username)) != 0) {
+    if (prompt_username(transport, input, output, username, sizeof(username)) != 0) {
         send_line(output, "닉네임 설정에 실패했습니다. 연결을 종료합니다.");
         return;
     }
@@ -437,7 +460,7 @@ void session_manager_run(session_manager_t *manager,
         send_line(output, "│ 5) 종료                       │");
         send_line(output, "└──────────────────────────────┘");
         send_text(output, "메뉴 선택 (1-5): ");
-        if (read_line(input, choice, sizeof(choice)) != 0) {
+        if (read_line(transport, input, output, choice, sizeof(choice)) != 0) {
             break;
         }
 
@@ -446,9 +469,9 @@ void session_manager_run(session_manager_t *manager,
         } else if (strcmp(choice, "2") == 0) {
             handle_board_list(manager, output);
         } else if (strcmp(choice, "3") == 0) {
-            handle_board_add(manager, input, output, username);
+            handle_board_add(manager, transport, input, output, username);
         } else if (strcmp(choice, "4") == 0) {
-            handle_board_delete(manager, input, output, username);
+            handle_board_delete(manager, transport, input, output, username);
         } else if (strcmp(choice, "5") == 0 || strcasecmp(choice, "q") == 0) {
             running = 0;
         } else {
