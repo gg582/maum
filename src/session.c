@@ -1,6 +1,7 @@
 #include "session.h"
 
 #include "log.h"
+#include "telnet.h"
 
 #include <ctype.h>
 #include <pthread.h>
@@ -69,11 +70,21 @@ static void send_line(FILE *out, const char *fmt, ...)
     fflush(out);
 }
 
-static int read_line(FILE *in, char *buffer, size_t size)
+static int read_line(session_transport_t transport, FILE *in, FILE *out, char *buffer, size_t size)
 {
-    if (fgets(buffer, (int)size, in) == NULL) {
+    int result = 0;
+    if (transport == SESSION_TRANSPORT_TELNET) {
+        result = telnet_read_line(in, out, buffer, size);
+    } else {
+        if (fgets(buffer, (int)size, in) == NULL) {
+            return -1;
+        }
+    }
+
+    if (result != 0) {
         return -1;
     }
+
     trim_line(buffer);
     return 0;
 }
@@ -268,7 +279,7 @@ static void handle_chat(session_manager_t *manager,
     char buffer[BOARD_CONTENT_MAX];
     while (1) {
         send_text(out, "> ");
-        if (read_line(in, buffer, sizeof(buffer)) != 0) {
+        if (read_line(transport, in, out, buffer, sizeof(buffer)) != 0) {
             break;
         }
         if (strcmp(buffer, "/exit") == 0) {
@@ -325,11 +336,96 @@ static void sanitize_content(char *content)
     }
 }
 
-static void handle_board_add(session_manager_t *manager, FILE *in, FILE *out, const char *username)
+static int is_valid_pin(const char *pin)
+{
+    if (pin == NULL) {
+        return 0;
+    }
+    size_t len = strlen(pin);
+    if (len != 4) {
+        return 0;
+    }
+    for (size_t i = 0; i < len; ++i) {
+        if (pin[i] < '0' || pin[i] > '9') {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+static int prompt_author_pin(session_manager_t *manager,
+                             session_transport_t transport,
+                             FILE *in,
+                             FILE *out,
+                             const char *username)
+{
+    char stored_pin[BOARD_PIN_MAX];
+    int load_result = board_author_pin_load(manager->board, username, stored_pin, sizeof(stored_pin));
+    if (load_result < 0) {
+        send_line(out, "비밀번호 정보를 불러오지 못했습니다.");
+        return -1;
+    }
+
+    char input[BOARD_PIN_MAX];
+    if (load_result == 0) {
+        for (int attempts = 0; attempts < 3; ++attempts) {
+            send_text(out, "등록된 4자리 비밀번호를 입력하세요: ");
+            if (read_line(transport, in, out, input, sizeof(input)) != 0) {
+                return -1;
+            }
+            if (!is_valid_pin(input)) {
+                send_line(out, "비밀번호는 숫자 4자리여야 합니다.");
+                continue;
+            }
+            if (strcmp(input, stored_pin) == 0) {
+                send_line(out, "인증되었습니다.");
+                return 0;
+            }
+            send_line(out, "비밀번호가 일치하지 않습니다.");
+        }
+        send_line(out, "비밀번호 인증에 실패했습니다.");
+        return -1;
+    }
+
+    for (int attempts = 0; attempts < 3; ++attempts) {
+        send_text(out, "새 4자리 비밀번호를 설정하세요: ");
+        if (read_line(transport, in, out, input, sizeof(input)) != 0) {
+            return -1;
+        }
+        if (!is_valid_pin(input)) {
+            send_line(out, "비밀번호는 숫자 4자리여야 합니다.");
+            continue;
+        }
+        char confirm[BOARD_PIN_MAX];
+        send_text(out, "확인을 위해 다시 입력하세요: ");
+        if (read_line(transport, in, out, confirm, sizeof(confirm)) != 0) {
+            return -1;
+        }
+        if (strcmp(input, confirm) != 0) {
+            send_line(out, "입력한 비밀번호가 서로 다릅니다.");
+            continue;
+        }
+        if (board_author_pin_store(manager->board, username, input) != 0) {
+            send_line(out, "비밀번호를 저장하지 못했습니다. 잠시 후 다시 시도해주세요.");
+            return -1;
+        }
+        send_line(out, "비밀번호가 설정되었습니다.");
+        return 0;
+    }
+
+    send_line(out, "비밀번호 설정에 실패했습니다.");
+    return -1;
+}
+
+static void handle_board_add(session_manager_t *manager,
+                             session_transport_t transport,
+                             FILE *in,
+                             FILE *out,
+                             const char *username)
 {
     send_text(out, "게시물 내용을 입력하세요 (한 줄): ");
     char buffer[BOARD_CONTENT_MAX];
-    if (read_line(in, buffer, sizeof(buffer)) != 0) {
+    if (read_line(transport, in, out, buffer, sizeof(buffer)) != 0) {
         send_line(out, "입력을 받지 못했습니다.");
         return;
     }
@@ -348,11 +444,15 @@ static void handle_board_add(session_manager_t *manager, FILE *in, FILE *out, co
     send_line(out, "[#%u] 등록 완료 (%s)", post.id, post.timestamp);
 }
 
-static void handle_board_delete(session_manager_t *manager, FILE *in, FILE *out, const char *username)
+static void handle_board_delete(session_manager_t *manager,
+                                session_transport_t transport,
+                                FILE *in,
+                                FILE *out,
+                                const char *username)
 {
     send_text(out, "삭제할 게시물 번호: ");
     char buffer[32];
-    if (read_line(in, buffer, sizeof(buffer)) != 0) {
+    if (read_line(transport, in, out, buffer, sizeof(buffer)) != 0) {
         send_line(out, "입력을 받지 못했습니다.");
         return;
     }
@@ -375,11 +475,15 @@ static void handle_board_delete(session_manager_t *manager, FILE *in, FILE *out,
     }
 }
 
-static int prompt_username(FILE *in, FILE *out, char *username, size_t size)
+static int prompt_username(session_transport_t transport,
+                           FILE *in,
+                           FILE *out,
+                           char *username,
+                           size_t size)
 {
     for (int attempts = 0; attempts < 3; ++attempts) {
         send_text(out, "사용할 닉네임을 입력하세요: ");
-        if (read_line(in, username, size) != 0) {
+        if (read_line(transport, in, out, username, size) != 0) {
             return -1;
         }
         sanitize_content(username);
@@ -418,8 +522,13 @@ void session_manager_run(session_manager_t *manager,
     send_line(output, "────────────────────────────────────");
 
     char username[USERNAME_MAX];
-    if (prompt_username(input, output, username, sizeof(username)) != 0) {
+    if (prompt_username(transport, input, output, username, sizeof(username)) != 0) {
         send_line(output, "닉네임 설정에 실패했습니다. 연결을 종료합니다.");
+        return;
+    }
+
+    if (prompt_author_pin(manager, transport, input, output, username) != 0) {
+        send_line(output, "비밀번호 확인에 실패했습니다. 연결을 종료합니다.");
         return;
     }
 
@@ -437,7 +546,7 @@ void session_manager_run(session_manager_t *manager,
         send_line(output, "│ 5) 종료                       │");
         send_line(output, "└──────────────────────────────┘");
         send_text(output, "메뉴 선택 (1-5): ");
-        if (read_line(input, choice, sizeof(choice)) != 0) {
+        if (read_line(transport, input, output, choice, sizeof(choice)) != 0) {
             break;
         }
 
@@ -446,9 +555,9 @@ void session_manager_run(session_manager_t *manager,
         } else if (strcmp(choice, "2") == 0) {
             handle_board_list(manager, output);
         } else if (strcmp(choice, "3") == 0) {
-            handle_board_add(manager, input, output, username);
+            handle_board_add(manager, transport, input, output, username);
         } else if (strcmp(choice, "4") == 0) {
-            handle_board_delete(manager, input, output, username);
+            handle_board_delete(manager, transport, input, output, username);
         } else if (strcmp(choice, "5") == 0 || strcasecmp(choice, "q") == 0) {
             running = 0;
         } else {
