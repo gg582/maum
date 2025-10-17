@@ -453,11 +453,11 @@ void session_manager_run(session_manager_t *manager,
     while (running) {
         send_line(output, "");
         send_line(output, "┌──────────────────────────────┐");
-        send_line(output, "│ 1) 실시간 채팅 참여           │");
-        send_line(output, "│ 2) 게시물 목록 보기           │");
-        send_line(output, "│ 3) 새 게시물 등록             │");
-        send_line(output, "│ 4) 내 게시물 삭제             │");
-        send_line(output, "│ 5) 종료                       │");
+        send_line(output, "│ 1) 실시간 채팅 참여          │");
+        send_line(output, "│ 2) 게시물 목록 보기          │");
+        send_line(output, "│ 3) 새 게시물 등록            │");
+        send_line(output, "│ 4) 내 게시물 삭제            │");
+        send_line(output, "│ 5) 종료                      │");
         send_line(output, "└──────────────────────────────┘");
         send_text(output, "메뉴 선택 (1-5): ");
         if (read_line(transport, input, output, choice, sizeof(choice)) != 0) {
