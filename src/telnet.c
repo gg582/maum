@@ -13,6 +13,30 @@ static void telnet_send_command(FILE *out, unsigned char command, unsigned char 
     fflush(out);
 }
 
+static int telnet_is_printable(int ch)
+{
+    unsigned char value = (unsigned char)ch;
+    return value >= 0x20 || value == '\t';
+}
+
+static void telnet_echo(FILE *out, const char *data, size_t length)
+{
+    if (out == NULL || data == NULL || length == 0) {
+        return;
+    }
+    fwrite(data, 1, length, out);
+    fflush(out);
+}
+
+static void telnet_echo_char(FILE *out, unsigned char ch)
+{
+    if (out == NULL) {
+        return;
+    }
+    fputc(ch, out);
+    fflush(out);
+}
+
 static void telnet_handle_negotiation(FILE *out, unsigned char command, unsigned char option)
 {
     if (out == NULL) {
@@ -24,9 +48,10 @@ static void telnet_handle_negotiation(FILE *out, unsigned char command, unsigned
         switch (option) {
         case TELNET_OPT_SUPPRESS_GO_AHEAD:
         case TELNET_OPT_BINARY:
+        case TELNET_OPT_ECHO:
             telnet_send_command(out, TELNET_WILL, option);
             break;
-        case TELNET_OPT_ECHO:
+        case TELNET_OPT_LINEMODE:
             telnet_send_command(out, TELNET_WONT, option);
             break;
         default:
@@ -40,13 +65,13 @@ static void telnet_handle_negotiation(FILE *out, unsigned char command, unsigned
     case TELNET_WILL:
         switch (option) {
         case TELNET_OPT_SUPPRESS_GO_AHEAD:
-        case TELNET_OPT_ECHO:
         case TELNET_OPT_BINARY:
+        case TELNET_OPT_NAWS:
+            telnet_send_command(out, TELNET_DO, option);
+            break;
+        case TELNET_OPT_ECHO:
         case TELNET_OPT_LINEMODE:
         case TELNET_OPT_TERMINAL_TYPE:
-        case TELNET_OPT_NAWS:
-            telnet_send_command(out, TELNET_DONT, option);
-            break;
         default:
             telnet_send_command(out, TELNET_DONT, option);
             break;
@@ -123,9 +148,11 @@ void telnet_send_initial_negotiation(FILE *out)
 
     telnet_send_command(out, TELNET_WILL, TELNET_OPT_SUPPRESS_GO_AHEAD);
     telnet_send_command(out, TELNET_WILL, TELNET_OPT_BINARY);
-    telnet_send_command(out, TELNET_WONT, TELNET_OPT_ECHO);
+    telnet_send_command(out, TELNET_WILL, TELNET_OPT_ECHO);
+    telnet_send_command(out, TELNET_DONT, TELNET_OPT_LINEMODE);
     telnet_send_command(out, TELNET_DO, TELNET_OPT_SUPPRESS_GO_AHEAD);
     telnet_send_command(out, TELNET_DO, TELNET_OPT_BINARY);
+    telnet_send_command(out, TELNET_DO, TELNET_OPT_NAWS);
 }
 
 int telnet_read_line(FILE *in, FILE *out, char *buffer, size_t size)
@@ -146,14 +173,30 @@ int telnet_read_line(FILE *in, FILE *out, char *buffer, size_t size)
             break;
         }
 
+        if (ch == '\b' || ch == 0x7f) {
+            if (index > 0) {
+                index--;
+                telnet_echo(out, "\b \b", 3);
+            }
+            continue;
+        }
+
+        if (ch == '\0') {
+            continue;
+        }
+
         if (ch == '\r') {
             int next = telnet_getc(in, out);
+            telnet_echo(out, "\r\n", 2);
             if (next == '\n' || next == 0 || next == EOF) {
                 running = 0;
             } else {
                 if (next != EOF && next != '\r' && next != '\n') {
                     if (index + 1 < size) {
                         buffer[index++] = (char)next;
+                        if (telnet_is_printable(next)) {
+                            telnet_echo_char(out, (unsigned char)next);
+                        }
                     }
                 }
                 running = 0;
@@ -162,11 +205,17 @@ int telnet_read_line(FILE *in, FILE *out, char *buffer, size_t size)
         }
 
         if (ch == '\n') {
+            telnet_echo(out, "\r\n", 2);
             break;
         }
 
         if (index + 1 < size) {
             buffer[index++] = (char)ch;
+            if (telnet_is_printable(ch)) {
+                telnet_echo_char(out, (unsigned char)ch);
+            }
+        } else {
+            telnet_echo_char(out, '\a');
         }
     }
 
