@@ -3,6 +3,7 @@
 #include "log.h"
 #include "maum.h"
 #include "session.h"
+#include "telnet.h"
 
 #include <errno.h>
 #include <netdb.h>
@@ -82,6 +83,10 @@ static void *client_thread(void *arg)
 
     setvbuf(input, NULL, _IONBF, 0);
     setvbuf(output, NULL, _IONBF, 0);
+
+    if (client->transport == SESSION_TRANSPORT_TELNET) {
+        telnet_send_initial_negotiation(output);
+    }
 
     session_manager_run(client->sessions, client->transport, input, output, client->peer);
 
