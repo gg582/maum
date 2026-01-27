@@ -6,6 +6,7 @@
 #define BOARD_AUTHOR_MAX 32
 #define BOARD_CONTENT_MAX 512
 #define BOARD_TIMESTAMP_MAX 32
+#define BOARD_PIN_MAX 8
 
 typedef struct board board_t;
 
@@ -22,5 +23,7 @@ void board_destroy(board_t *board);
 int board_list(board_t *board, board_post_t **posts, size_t *count);
 int board_add(board_t *board, const char *author, const char *content, board_post_t *out_post);
 int board_remove(board_t *board, unsigned int id, const char *requester, int *not_owner);
+int board_author_pin_load(board_t *board, const char *author, char *pin, size_t size);
+int board_author_pin_store(board_t *board, const char *author, const char *pin);
 
 #endif // BOARD_H

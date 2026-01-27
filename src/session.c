@@ -336,6 +336,87 @@ static void sanitize_content(char *content)
     }
 }
 
+static int is_valid_pin(const char *pin)
+{
+    if (pin == NULL) {
+        return 0;
+    }
+    size_t len = strlen(pin);
+    if (len != 4) {
+        return 0;
+    }
+    for (size_t i = 0; i < len; ++i) {
+        if (pin[i] < '0' || pin[i] > '9') {
+            return 0;
+        }
+    }
+    return 1;
+}
+
+static int prompt_author_pin(session_manager_t *manager,
+                             session_transport_t transport,
+                             FILE *in,
+                             FILE *out,
+                             const char *username)
+{
+    char stored_pin[BOARD_PIN_MAX];
+    int load_result = board_author_pin_load(manager->board, username, stored_pin, sizeof(stored_pin));
+    if (load_result < 0) {
+        send_line(out, "비밀번호 정보를 불러오지 못했습니다.");
+        return -1;
+    }
+
+    char input[BOARD_PIN_MAX];
+    if (load_result == 0) {
+        for (int attempts = 0; attempts < 3; ++attempts) {
+            send_text(out, "등록된 4자리 비밀번호를 입력하세요: ");
+            if (read_line(transport, in, out, input, sizeof(input)) != 0) {
+                return -1;
+            }
+            if (!is_valid_pin(input)) {
+                send_line(out, "비밀번호는 숫자 4자리여야 합니다.");
+                continue;
+            }
+            if (strcmp(input, stored_pin) == 0) {
+                send_line(out, "인증되었습니다.");
+                return 0;
+            }
+            send_line(out, "비밀번호가 일치하지 않습니다.");
+        }
+        send_line(out, "비밀번호 인증에 실패했습니다.");
+        return -1;
+    }
+
+    for (int attempts = 0; attempts < 3; ++attempts) {
+        send_text(out, "새 4자리 비밀번호를 설정하세요: ");
+        if (read_line(transport, in, out, input, sizeof(input)) != 0) {
+            return -1;
+        }
+        if (!is_valid_pin(input)) {
+            send_line(out, "비밀번호는 숫자 4자리여야 합니다.");
+            continue;
+        }
+        char confirm[BOARD_PIN_MAX];
+        send_text(out, "확인을 위해 다시 입력하세요: ");
+        if (read_line(transport, in, out, confirm, sizeof(confirm)) != 0) {
+            return -1;
+        }
+        if (strcmp(input, confirm) != 0) {
+            send_line(out, "입력한 비밀번호가 서로 다릅니다.");
+            continue;
+        }
+        if (board_author_pin_store(manager->board, username, input) != 0) {
+            send_line(out, "비밀번호를 저장하지 못했습니다. 잠시 후 다시 시도해주세요.");
+            return -1;
+        }
+        send_line(out, "비밀번호가 설정되었습니다.");
+        return 0;
+    }
+
+    send_line(out, "비밀번호 설정에 실패했습니다.");
+    return -1;
+}
+
 static void handle_board_add(session_manager_t *manager,
                              session_transport_t transport,
                              FILE *in,
@@ -443,6 +524,11 @@ void session_manager_run(session_manager_t *manager,
     char username[USERNAME_MAX];
     if (prompt_username(transport, input, output, username, sizeof(username)) != 0) {
         send_line(output, "닉네임 설정에 실패했습니다. 연결을 종료합니다.");
+        return;
+    }
+
+    if (prompt_author_pin(manager, transport, input, output, username) != 0) {
+        send_line(output, "비밀번호 확인에 실패했습니다. 연결을 종료합니다.");
         return;
     }
 

@@ -4,6 +4,7 @@
 
 #include <errno.h>
 #include <pthread.h>
+#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -16,6 +17,7 @@
 
 struct board {
     char path[256];
+    char pin_path[256];
     pthread_mutex_t lock;
     unsigned int next_id;
 };
@@ -72,6 +74,11 @@ static void update_next_id(board_t *board)
     board->next_id = max_id + 1;
 }
 
+static void build_pin_path(board_t *board, const char *path)
+{
+    snprintf(board->pin_path, sizeof(board->pin_path), "%s.pin", path);
+}
+
 board_t *board_create(const char *path)
 {
     if (path == NULL) {
@@ -89,6 +96,7 @@ board_t *board_create(const char *path)
 
     strncpy(board->path, path, sizeof(board->path) - 1);
     board->path[sizeof(board->path) - 1] = '\0';
+    build_pin_path(board, board->path);
 
     if (pthread_mutex_init(&board->lock, NULL) != 0) {
         free(board);
@@ -104,8 +112,125 @@ board_t *board_create(const char *path)
     }
     fclose(file);
 
+    FILE *pin_file = fopen(board->pin_path, "a+");
+    if (pin_file == NULL) {
+        LOG_ERROR(COMPONENT, "Unable to open board credential storage '%s': %s", board->pin_path,
+                  strerror(errno));
+        pthread_mutex_destroy(&board->lock);
+        free(board);
+        return NULL;
+    }
+    fclose(pin_file);
+
     update_next_id(board);
     return board;
+}
+
+int board_author_pin_load(board_t *board, const char *author, char *pin, size_t size)
+{
+    if (board == NULL || author == NULL || pin == NULL || size == 0) {
+        return -1;
+    }
+
+    if (pthread_mutex_lock(&board->lock) != 0) {
+        return -1;
+    }
+
+    FILE *file = fopen(board->pin_path, "r");
+    if (file == NULL) {
+        pthread_mutex_unlock(&board->lock);
+        return -1;
+    }
+
+    int result = 1;
+    char line[BOARD_AUTHOR_MAX + BOARD_PIN_MAX + 8];
+    while (fgets(line, sizeof(line), file) != NULL) {
+        char *sep = strchr(line, '|');
+        if (sep == NULL) {
+            continue;
+        }
+        *sep = '\0';
+        char *stored_pin = sep + 1;
+        size_t len = strlen(stored_pin);
+        while (len > 0 && (stored_pin[len - 1] == '\n' || stored_pin[len - 1] == '\r')) {
+            stored_pin[len - 1] = '\0';
+            len--;
+        }
+        if (strcmp(line, author) == 0) {
+            strncpy(pin, stored_pin, size - 1);
+            pin[size - 1] = '\0';
+            result = 0;
+            break;
+        }
+    }
+
+    fclose(file);
+    pthread_mutex_unlock(&board->lock);
+    return result;
+}
+
+int board_author_pin_store(board_t *board, const char *author, const char *pin)
+{
+    if (board == NULL || author == NULL || pin == NULL) {
+        return -1;
+    }
+
+    if (pthread_mutex_lock(&board->lock) != 0) {
+        return -1;
+    }
+
+    FILE *file = fopen(board->pin_path, "r");
+    char temp_path[sizeof(((board_t *)0)->pin_path) + 4];
+    snprintf(temp_path, sizeof(temp_path), "%s.tmp", board->pin_path);
+    FILE *temp = fopen(temp_path, "w");
+    if (temp == NULL) {
+        if (file != NULL) {
+            fclose(file);
+        }
+        pthread_mutex_unlock(&board->lock);
+        return -1;
+    }
+
+    bool updated = false;
+    if (file != NULL) {
+        char line[BOARD_AUTHOR_MAX + BOARD_PIN_MAX + 8];
+        while (fgets(line, sizeof(line), file) != NULL) {
+            char *sep = strchr(line, '|');
+            if (sep == NULL) {
+                continue;
+            }
+            *sep = '\0';
+            char *existing_pin = sep + 1;
+            size_t len = strlen(existing_pin);
+            while (len > 0 && (existing_pin[len - 1] == '\n' || existing_pin[len - 1] == '\r')) {
+                existing_pin[len - 1] = '\0';
+                len--;
+            }
+            if (strcmp(line, author) == 0) {
+                fprintf(temp, "%s|%s\n", author, pin);
+                updated = true;
+            } else {
+                fprintf(temp, "%s|%s\n", line, existing_pin);
+            }
+        }
+        fclose(file);
+    }
+
+    if (!updated) {
+        fprintf(temp, "%s|%s\n", author, pin);
+    }
+
+    fflush(temp);
+    fclose(temp);
+
+    if (rename(temp_path, board->pin_path) != 0) {
+        unlink(temp_path);
+        pthread_mutex_unlock(&board->lock);
+        return -1;
+    }
+
+    pthread_mutex_unlock(&board->lock);
+    return 0;
 }
 
 void board_destroy(board_t *board)
